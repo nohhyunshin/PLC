@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Media;
 using System.Net.Configuration;
@@ -33,9 +34,10 @@ namespace PLC
         private bool isUpVisible = true;
 
         // PLC 연결용
-        //private readonly CommObjectFactory20 _factory = new CommObjectFactory20();
+        private readonly CommObjectFactory20 _factory = new CommObjectFactory20();
         private bool _connected = false;
-        //private string _endpoint = "";
+        private bool test = false;          // 연결 테스트 확인
+        private string _endpoint = "";
 
         public MainWindow()
         {
@@ -65,26 +67,31 @@ namespace PLC
         {
             try
             {
-                //    // PLC IP/Port 설정
-                //    string ip = "192.168.0.150";  // 예시
-                //    int port = 2004;              // 예시
+                // PLC IP/Port 설정
+                string ip = "192.168.0.200";  // 예시
+                int port = 2004;              // 예시
 
-                //    _endpoint = $"{ip}:{port}";
+                var ep = $"{ip}:{port}";
 
-                //    var drv = _factory.GetMLDPCommObject20(_endpoint);
-                //    int ret = drv.Connect("");
-                //    if (ret == 1)
-                //    {
-                //        _connected = true;
-                //        MessageBox.Show($"PLC 연결 성공! {_endpoint}");
-                //    }
-                //    else
-                //    {
-                //        _connected = false;
-                //        MessageBox.Show("PLC 연결 실패");
-                //    }
+                var drv = _factory.GetMLDPCommObject20(ep);
+                int ret = drv.Connect("");
 
-                //    try { drv.Disconnect(); } catch { }
+                if (ret == 1)
+                {
+                    _connected = true;
+                    _endpoint = ep;
+                    test = true;
+                    
+                    MessageBox.Show($"PLC 연결 성공! {ep}");
+                }
+                else
+                {
+                    _connected = false;
+                    test = false;
+                    MessageBox.Show("PLC 연결 실패");
+                }
+
+                try { drv.Disconnect(); } catch { }
                 _connected = true;
             }
             catch (Exception ex)
@@ -104,12 +111,13 @@ namespace PLC
 
         private async void FloorButton_Click(object sender, RoutedEventArgs e)
         {
+            MessageBox.Show($"{_connected}");
             if (!(sender is Button btn)) return;
-            //if (!_connected)
-            //{
-            //    MessageBox.Show("PLC와 연결되지 않았습니다.");
-            //    return;
-            //}
+            if (!_connected)
+            {
+                MessageBox.Show("PLC와 연결되지 않았습니다.");
+                return;
+            }
 
             // 클릭한 버튼에만 네온 효과 적용 (이전 버튼 제거)
             foreach (var child in ElevatorPanel.Children)
@@ -144,60 +152,31 @@ namespace PLC
             string direction = targetFloor > currentFloor ? "▲" : "▼";
             upDown.Text = direction;
 
-            //try
-            //{
-            //    // PLC MX0에 층수 저장
-            //    for (int i = 0; i < 3; i++)
-            //    {
-            //        WithFreshDriver(drv =>
-            //        {
-            //            var device = _factory.CreateDevice();
-            //            device.ucDataType = (byte)'W';   // 워드
-            //            device.ucDeviceType = (byte)'M'; // MX 영역
-            //            device.lOffset = i;              // MXi
-            //            device.lSize = 2;                // 워드 = 2바이트
-            //            drv.AddDeviceInfo(device);
+            try
+            {
+                // PLC MX0에 층수 저장
+                WithFreshDriver(drv =>
+                {
+                    var device = _factory.CreateDevice();
+                    device.ucDataType = (byte)'B';   // 워드
+                    device.ucDeviceType = (byte)'M'; // MX 영역
+                    device.lOffset = 10;              // MX0
+                    device.lSize = 1;                // 워드 = 2바이트
+                    drv.AddDeviceInfo(device);
 
-            //            ushort val = (ushort)targetFloor;
-            //            byte[] buf = new byte[2] { (byte)(val & 0xFF), (byte)(val >> 8) }; // LE
-            //            int ret = drv.WriteRandomDevice(buf);
+                    ushort val = (ushort)targetFloor;
+                    byte[] buf = new byte[1] { (byte)(val & 0xFF) };
+                    MessageBox.Show(buf[0].ToString());
+                    int ret = drv.WriteRandomDevice(buf);
 
-            //            Append($"MX{i}에 층수 {targetFloor} 쓰기 → ret={ret}");
-            //            return ret;
-            //        });
-            //    }
-
-            //    // PLC %IX0 입력 비트 ON/OFF
-            //    WithFreshDriver(drv =>
-            //    {
-            //        var device = _factory.CreateDevice();
-            //        device.ucDataType = (byte)'B';   // 비트 타입
-            //        device.ucDeviceType = (byte)'I'; // 입력 %IX
-            //        device.lOffset = 0;              // IX0 바이트
-            //        device.lSize = 1;                // 1바이트
-            //        drv.AddDeviceInfo(device);
-
-            //        byte val = 0;
-            //        val |= 1 << 0; // IX0.0.0 ON
-            //        val |= 1 << 1; // IX0.0.1 ON
-            //        val |= 1 << 2; // IX0.0.2 ON
-
-            //        int retOn = drv.WriteRandomDevice(new byte[] { val });
-            //        Append($"%IX0 비트 ON → ret={retOn}");
-
-            //        System.Threading.Thread.Sleep(500);
-
-            //        val = 0; // OFF
-            //        int retOff = drv.WriteRandomDevice(new byte[] { val });
-            //        Append($"%IX0 비트 OFF → ret={retOff}");
-
-            //        return 1;
-            //    });
-            //}
-            //catch (Exception ex)
-            //{
-            //    MessageBox.Show("PLC 처리 오류: " + ex.Message);
-            //}
+                    Debug.WriteLine($"MX에 층수 {targetFloor} 쓰기 → ret={ret}");
+                    return ret;
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("PLC 처리 오류: " + ex.Message);
+            }
 
             // 층 이동 시뮬레이션 (1층씩 TON 느낌으로 1초 간격)
             int step = targetFloor > currentFloor ? 1 : -1;
@@ -223,90 +202,75 @@ namespace PLC
             }
 
             await Task.Delay(2000);
-            await OpenDoor();
+            //await OpenDoor();
         }
 
         // 깜빡임 타이머
         private void BlinkTimer_Tick(object sender, EventArgs e)
         {
-            if (isUpVisible)
-            {
-                upDown.Visibility = Visibility.Hidden;// 숨기기
-            }
-            else
-            {
-                // 이동중 방향 표시
-                upDown.Visibility = Visibility.Visible;
-            }
+            upDown.Visibility = isUpVisible ? Visibility.Hidden : Visibility.Visible;
             isUpVisible = !isUpVisible;
         }
 
         // 엘리베이터 문 개폐 동작
-        private async Task OpenDoor()
-        {
-            // 문 열림
-            opCL.Text = "OPEN";
-            opCL.Foreground = Brushes.IndianRed;
-
-            // 문 열림 사운드 재생
-            try
-            {
-                SoundPlayer player = new SoundPlayer("open.wav");
-                player.Play(); // 비동기 재생 (UI 멈추지 않음)
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("사운드 재생 오류: " + ex.Message);
-            }
-
-            await Task.Delay(3000);         // 문 열림 유지 시간
-
-            // 문 닫힘
-            opCL.Text = "CLOSE";
-            opCL.Foreground = Brushes.ForestGreen;
-
-            // 문 닫힘 사운드 재생
-            try
-            {
-                SoundPlayer player = new SoundPlayer("close.wav");
-                player.Play(); // 비동기 재생 (UI 멈추지 않음)
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("사운드 재생 오류: " + ex.Message);
-            }
-
-            await Task.Delay(2000); // 닫힘 유지
-
-            // 기본 공백으로 초기화
-            opCL.Text = "        ";
-        }
-
-        // PLC 헬퍼
-        //private T WithFreshDriver<T>(Func<CommObject20, T> work)
+        //private async Task OpenDoor()
         //{
-        //    if (string.IsNullOrWhiteSpace(_endpoint))
-        //        throw new InvalidOperationException("엔드 포인트가 설정되지 않았습니다.");
+        //    // 문 열림
+        //    opCL.Text = "OPEN";
+        //    opCL.Foreground = Brushes.IndianRed;
 
-        //    CommObject20 drv = null;
+        //    // 문 열림 사운드 재생
         //    try
         //    {
-        //        drv = _factory.GetMLDPCommObject20(_endpoint);
-        //        int c = drv.Connect("");
-        //        if (c != 1) throw new Exception("작업용 연결 실패");
-        //        return work(drv);
+        //        SoundPlayer player = new SoundPlayer("open.wav");
+        //        player.Play(); // 비동기 재생 (UI 멈추지 않음)
         //    }
-        //    finally
+        //    catch (Exception ex)
         //    {
-        //        try { drv?.Disconnect(); } catch { }
+        //        MessageBox.Show("사운드 재생 오류: " + ex.Message);
         //    }
+
+        //    await Task.Delay(3000);         // 문 열림 유지 시간
+
+        //    // 문 닫힘
+        //    opCL.Text = "CLOSE";
+        //    opCL.Foreground = Brushes.ForestGreen;
+
+        //    // 문 닫힘 사운드 재생
+        //    try
+        //    {
+        //        SoundPlayer player = new SoundPlayer("close.wav");
+        //        player.Play(); // 비동기 재생 (UI 멈추지 않음)
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show("사운드 재생 오류: " + ex.Message);
+        //    }
+
+        //    await Task.Delay(2000); // 닫힘 유지
+
+        //    // 기본 공백으로 초기화
+        //    opCL.Text = "        ";
         //}
 
-        // 로그 헬퍼
-        private void Append(string msg)
+        // PLC 헬퍼
+        private T WithFreshDriver<T>(Func<CommObject20, T> work)
         {
-            TextBox_Log.AppendText($"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}");
-            TextBox_Log.ScrollToEnd();
+            if (string.IsNullOrWhiteSpace(_endpoint))
+                throw new InvalidOperationException("엔드 포인트가 설정되지 않았습니다.");
+
+            CommObject20 drv = null;
+            try
+            {
+                drv = _factory.GetMLDPCommObject20(_endpoint);
+                int c = drv.Connect("");
+                if (c != 1) throw new Exception("작업용 연결 실패");
+                return work(drv);
+            }
+            finally
+            {
+                try { drv?.Disconnect(); } catch { }
+            }
         }
     }
 }
