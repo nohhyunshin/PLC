@@ -26,6 +26,9 @@ namespace PLC
     /// </summary>
     public partial class MainWindow : Window
     {
+        // WPF 실행 시 이벤트 핸들러 연결 확인
+        private bool _isLoaded = false;
+
         // 네온 효과 - 층 버튼 클릭 시 동작
         private readonly DropShadowEffect neonEffect;
 
@@ -65,6 +68,9 @@ namespace PLC
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            if (_isLoaded) return; // 이미 실행된 경우 무시
+            _isLoaded = true;
+
             try
             {
                 // PLC IP/Port 설정
@@ -104,7 +110,8 @@ namespace PLC
             {
                 if (child is Button btn)
                 {
-                    btn.Click += FloorButton_Click;
+                    btn.Click -= FloorButton_Click; // 기존 이벤트 제거
+                    btn.Click += FloorButton_Click; // 새로 등록
                 }
             }
         }
@@ -152,24 +159,31 @@ namespace PLC
             string direction = targetFloor > currentFloor ? "▲" : "▼";
             upDown.Text = direction;
 
+            // 유효 층수 체크
+            if (targetFloor < 1 || targetFloor > 6)
+            {
+                MessageBox.Show($"{targetFloor}층은 존재하지 않습니다.\n1~6층만 이용 가능합니다.",
+                               "잘못된 층수", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             try
             {
-                // PLC MX0에 층수 저장
                 WithFreshDriver(drv =>
                 {
                     var device = _factory.CreateDevice();
-                    device.ucDataType = (byte)'B';   // 워드
-                    device.ucDeviceType = (byte)'M'; // MX 영역
-                    device.lOffset = 10;              // MX0
-                    device.lSize = 1;                // 워드 = 2바이트
+                    device.ucDataType = (byte)'B';
+                    device.ucDeviceType = (byte)'M';
+                    device.lOffset = 0;              // MX0부터
+                    device.lSize = 1;
                     drv.AddDeviceInfo(device);
 
-                    ushort val = (ushort)targetFloor;
-                    byte[] buf = new byte[1] { (byte)(val & 0xFF) };
-                    MessageBox.Show(buf[0].ToString());
-                    int ret = drv.WriteRandomDevice(buf);
+                    // 해당 층의 비트만 ON, 나머지는 OFF
+                    byte targetBit = (byte)(1 << (targetFloor));
+                    byte[] buf = new byte[1] { targetBit };
 
-                    Debug.WriteLine($"MX에 층수 {targetFloor} 쓰기 → ret={ret}");
+                    MessageBox.Show($"{targetFloor}층 → 비트패턴: {Convert.ToString(buf[0], 2).PadLeft(8, '0')}");
+                    int ret = drv.WriteRandomDevice(buf);
                     return ret;
                 });
             }
@@ -179,16 +193,16 @@ namespace PLC
             }
 
             // 층 이동 시뮬레이션 (1층씩 TON 느낌으로 1초 간격)
-            int step = targetFloor > currentFloor ? 1 : -1;
-            for (int floor = currentFloor + step; floor != targetFloor + step; floor += step)
-            {
-                await Task.Delay(1000); // 1초 대기
-            }
+            int totalFloors = Math.Abs(targetFloor - currentFloor);
+            await Task.Delay(2000);     // 이동에 3초만 소요
 
             // 이동 끝나면 깜빡임 종료 = 해당 층에 도착!
             blinkTimer.Stop();
             upDown.Text = $"{direction}"; // 깜빡임 끝나고 방향 고정
             display.Text = $"{targetFloor}";
+
+            // 엘리베이터 도착 전 딜레이 1초
+            //await Task.Delay(300);
 
             // 엘리베이터 도착 사운드 재생
             try
@@ -202,7 +216,7 @@ namespace PLC
             }
 
             await Task.Delay(2000);
-            //await OpenDoor();
+            await OpenDoor();
         }
 
         // 깜빡임 타이머
@@ -213,45 +227,45 @@ namespace PLC
         }
 
         // 엘리베이터 문 개폐 동작
-        //private async Task OpenDoor()
-        //{
-        //    // 문 열림
-        //    opCL.Text = "OPEN";
-        //    opCL.Foreground = Brushes.IndianRed;
+        private async Task OpenDoor()
+        {
+            // 문 열림
+            opCL.Text = "OPEN";
+            opCL.Foreground = Brushes.IndianRed;
 
-        //    // 문 열림 사운드 재생
-        //    try
-        //    {
-        //        SoundPlayer player = new SoundPlayer("open.wav");
-        //        player.Play(); // 비동기 재생 (UI 멈추지 않음)
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        MessageBox.Show("사운드 재생 오류: " + ex.Message);
-        //    }
+            // 문 열림 사운드 재생
+            try
+            {
+                SoundPlayer player = new SoundPlayer("open.wav");
+                player.Play(); // 비동기 재생 (UI 멈추지 않음)
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("사운드 재생 오류: " + ex.Message);
+            }
 
-        //    await Task.Delay(3000);         // 문 열림 유지 시간
+            await Task.Delay(3000);         // 문 열림 유지 시간
 
-        //    // 문 닫힘
-        //    opCL.Text = "CLOSE";
-        //    opCL.Foreground = Brushes.ForestGreen;
+            // 문 닫힘
+            opCL.Text = "CLOSE";
+            opCL.Foreground = Brushes.ForestGreen;
 
-        //    // 문 닫힘 사운드 재생
-        //    try
-        //    {
-        //        SoundPlayer player = new SoundPlayer("close.wav");
-        //        player.Play(); // 비동기 재생 (UI 멈추지 않음)
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        MessageBox.Show("사운드 재생 오류: " + ex.Message);
-        //    }
+            // 문 닫힘 사운드 재생
+            try
+            {
+                SoundPlayer player = new SoundPlayer("close.wav");
+                player.Play(); // 비동기 재생 (UI 멈추지 않음)
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("사운드 재생 오류: " + ex.Message);
+            }
 
-        //    await Task.Delay(2000); // 닫힘 유지
+            await Task.Delay(2000); // 닫힘 유지
 
-        //    // 기본 공백으로 초기화
-        //    opCL.Text = "        ";
-        //}
+            // 기본 공백으로 초기화
+            opCL.Text = "        ";
+        }
 
         // PLC 헬퍼
         private T WithFreshDriver<T>(Func<CommObject20, T> work)

@@ -138,16 +138,16 @@
         <StackPanel Grid.Column="1" Grid.Row="1" Orientation="Vertical" VerticalAlignment="Center"
                     x:Name="ElevatorPanel" Width="130" Background="Transparent" Margin="10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Content="1" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
-                <Button Content="2" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
+                <Button Content="1" Style="{StaticResource CircularButton}"/>
+                <Button Content="2" Style="{StaticResource CircularButton}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Content="3" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
-                <Button Content="4" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
+                <Button Content="3" Style="{StaticResource CircularButton}"/>
+                <Button Content="4" Style="{StaticResource CircularButton}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Content="5" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
-                <Button Content="6" Style="{StaticResource CircularButton}" Click="FloorButton_Click"/>
+                <Button Content="5" Style="{StaticResource CircularButton}"/>
+                <Button Content="6" Style="{StaticResource CircularButton}"/>
             </StackPanel>
         </StackPanel>
     </Grid>
